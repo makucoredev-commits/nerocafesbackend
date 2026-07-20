@@ -54,12 +54,9 @@ import kitchenRoutes from './routes/kitchenRoutes.js';
 // ============================================================================
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const PORT = process.env.PORT || 5000;
-const NODE_ENV = process.env.NODE_ENV || 'production';
-const TRUST_PROXY = Number(process.env.TRUST_PROXY || 1);
 
 // ============================================================================
-// ENVIRONMENT LOADING
+// ENVIRONMENT LOADING  (MUST run before any process.env reads)
 // ============================================================================
 
 function loadEnvironment() {
@@ -79,21 +76,46 @@ function loadEnvironment() {
 
   const nodeEnv = process.env.NODE_ENV;
 
-  // Load appropriate environment file
+  // Load the production .env first (always preferred if it exists)
   if (fs.existsSync(envPath)) {
     dotenv.config({ path: envPath });
-    logger.info('ENV', `Loaded .env (${nodeEnv} mode)`);
+    logger.info('ENV', `Loaded .env from: ${envPath} (${nodeEnv} mode)`);
   } else if (nodeEnv !== 'production' && fs.existsSync(devEnvPath)) {
     dotenv.config({ path: devEnvPath });
-    logger.info('ENV', 'Loaded .env.dev for development');
+    logger.info('ENV', `Loaded .env.dev from: ${devEnvPath}`);
   } else {
-    logger.info('ENV', `Using system environment variables (${nodeEnv} mode)`);
+    logger.info('ENV', `No .env file found – using system environment variables (${nodeEnv} mode)`);
   }
 
   return nodeEnv;
 }
 
 const nodeEnv = loadEnvironment();
+
+// ---------------------------------------------------------------------------
+// Read configuration AFTER dotenv has populated process.env
+// ---------------------------------------------------------------------------
+const PORT = process.env.PORT;          // no hardcoded fallback – .env must set it
+const NODE_ENV = process.env.NODE_ENV || 'production';
+const TRUST_PROXY = Number(process.env.TRUST_PROXY || 1);
+
+// ---------------------------------------------------------------------------
+// Startup diagnostics – printed immediately so PM2 / journalctl captures them
+// ---------------------------------------------------------------------------
+console.log('──────────────── STARTUP DIAGNOSTICS ────────────────');
+console.log(`  cwd            : ${process.cwd()}`);
+console.log(`  __dirname      : ${__dirname}`);
+console.log(`  .env path      : ${path.resolve(__dirname, '../.env')}`);
+console.log(`  .env exists    : ${fs.existsSync(path.resolve(__dirname, '../.env'))}`);
+console.log(`  process.env.PORT: ${process.env.PORT}`);
+console.log(`  Resolved PORT  : ${PORT}`);
+console.log(`  NODE_ENV       : ${NODE_ENV}`);
+console.log('─────────────────────────────────────────────────────');
+
+if (!PORT) {
+  console.error('FATAL: PORT is not defined in .env or system environment. Exiting.');
+  process.exit(1);
+}
 
 // ============================================================================
 // ENVIRONMENT VALIDATION
